@@ -1,5 +1,6 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from transformers import pipeline
 
 app = FastAPI(title="LLM Deployment API")
@@ -10,7 +11,7 @@ generator = pipeline(
 )
 
 class PromptRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=3, max_length=1000)
 
 @app.get("/")
 def home():
@@ -18,9 +19,23 @@ def home():
 
 @app.post("/generate")
 def generate(request: PromptRequest):
-    result = generator(
-        request.prompt,
-        max_new_tokens=50
-    )
+    try:
+        result = generator(
+            "Answer the following question clearly "
+            "in 2 to 4 complete sentences: "
+            + request.prompt,
+            max_new_tokens=100,
+            num_beams=4,
+            do_sample=False,
+            repetition_penalty=1.2,
+            truncation=True
+        )
 
-    return {"response": result[0]["generated_text"]}
+        answer = result[0]["generated_text"].strip()
+        return {"response": answer}
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Text generation failed"
+        )
